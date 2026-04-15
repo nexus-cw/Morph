@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Morph;
 using Xunit;
 
@@ -81,5 +82,33 @@ public class MaxDepthTests
         var result = mapper.Map<SrcNode, SrcNode>(root);
 
         Assert.Same(root.Self, result.Self);
+    }
+
+    class SrcTree { public int Value { get; set; } public List<SrcTree> Children { get; set; } = new(); }
+    class DstTree { public int Value { get; set; } public List<DstTree> Children { get; set; } = new(); }
+
+    // C1 regression: recursion through collection elements must tick the depth counter.
+    // Pre-fix, CollectionMapper passed `depth` straight through instead of `depth + 1`, so
+    // GuardDepth never fired on list-element nesting and deep/cyclic graphs could blow the
+    // stack (uncatchable StackOverflowException). We exercise this with a deep-but-finite
+    // chain so the pre-fix failure is a missed-throw, not a test-host crash.
+    [Fact]
+    public void Deep_collection_element_chain_trips_depth_guard()
+    {
+        var config = new MapperConfiguration(cfg => cfg.CreateMap<SrcTree, DstTree>());
+        var mapper = config.CreateMapper();
+
+        // 100 levels of single-child nesting, reached via List<SrcTree>.Children.
+        var root = new SrcTree { Value = 0 };
+        var current = root;
+        for (int i = 1; i < 100; i++)
+        {
+            var next = new SrcTree { Value = i };
+            current.Children.Add(next);
+            current = next;
+        }
+
+        var ex = Assert.Throws<AutoMapperMappingException>(() => mapper.Map<SrcTree, DstTree>(root));
+        Assert.Contains("Max recursion depth", ex.Message);
     }
 }

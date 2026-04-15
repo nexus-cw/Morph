@@ -44,8 +44,11 @@ internal static class CollectionMapper
     public static object Map(IEnumerable source, Type sourceElemType, Type destinationType, Type destElemType, Mapper mapper, int depth)
     {
         var mapped = new List<object?>();
+        // depth + 1: each collection element is one recursion level deeper, so the mapper's
+        // GuardDepth sees list-element cycles the same way it sees property-nested cycles.
+        // CVE-2026-32933 regression — C1.
         foreach (var item in source)
-            mapped.Add(mapper.MapDynamic(item, item?.GetType() ?? sourceElemType, destElemType, depth));
+            mapped.Add(mapper.MapDynamic(item, item?.GetType() ?? sourceElemType, destElemType, depth + 1));
 
         if (destinationType.IsArray)
         {
