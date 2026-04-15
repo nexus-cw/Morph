@@ -126,7 +126,7 @@ internal sealed class Mapper : IMapper
         // the current depth — otherwise a resolver that maps a nested value restarts the
         // depth counter at 0 and bypasses MaxDepth (I4). DepthAwareMapper pre-loads
         // `depth + 1` so the re-entry counts as the next recursion level.
-        var context = new ResolutionContext(new DepthAwareMapper(this, depth), depth);
+        var context = new ResolutionContext(new DepthAwareMapper(this, depth));
 
         // Full-type converter short-circuit.
         if (typeMap.TypeConverterType is not null)
