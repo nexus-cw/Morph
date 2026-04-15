@@ -151,6 +151,8 @@ Where Morph *deliberately* diverges. Called out so migrators aren't surprised.
 
 3. **`AssertConfigurationIsValid()` is opinionated** — it treats any public settable destination property that has no matching source, no `MapFrom`, and no `Ignore()` as an error. AutoMapper's default is the same, but Morph doesn't offer an off-switch.
 
+4. **Default `MaxDepth` of 32 on nested maps** — prevents stack exhaustion from self-referential or adversarial object graphs. This is the mitigation for the CVE-2026-32933 pattern (AutoMapper ≤15.1.0 / ≤16.1.0 had no default cap and was vulnerable to DoS via `StackOverflowException`, which .NET cannot catch). Morph throws `AutoMapperMappingException` on overflow, which *is* catchable. Configurable via `MapperConfiguration.MaxDepth = N`.
+
 ---
 
 ## Public surface file layout
