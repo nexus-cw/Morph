@@ -249,10 +249,25 @@ internal sealed class Mapper : IMapper
         }
 
         // Nested map dispatch — bump depth before recursing into another type map.
-        if (_config.TypeMaps.ContainsKey((sourceType, destinationType)))
+        // Walk the source-type hierarchy so a map registered against a base class still
+        // wins when the declared member type is a subclass (I3). MapDynamic itself performs
+        // the assignable-from lookup when it actually executes the map, so we only need to
+        // confirm a matching map exists to choose this branch over ValueCoercion.
+        if (HasAssignableTypeMap(sourceType, destinationType))
             return MapDynamic(value, sourceType, destinationType, depth + 1);
 
         return ValueCoercion.Convert(value, destinationType);
+    }
+
+    private bool HasAssignableTypeMap(Type sourceType, Type destinationType)
+    {
+        if (_config.TypeMaps.ContainsKey((sourceType, destinationType))) return true;
+        foreach (var kv in _config.TypeMaps)
+        {
+            if (kv.Key.Item2 != destinationType) continue;
+            if (kv.Key.Item1.IsAssignableFrom(sourceType)) return true;
+        }
+        return false;
     }
 
     private object? CoerceIfNeeded(object? value, Type destinationType)
