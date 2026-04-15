@@ -7,6 +7,8 @@ obj/
 .idea/
 packages/
 *.nupkg
+*.snupkg
+out/
 artifacts/
 TestResults/
 coverage/

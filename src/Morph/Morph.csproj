@@ -11,14 +11,44 @@
 
     <PackageId>Morph</PackageId>
     <Version>0.1.0-alpha</Version>
-    <Authors>Morph contributors</Authors>
-    <Description>Lightweight object-to-object mapper for .NET. API-compatible with the core of AutoMapper.</Description>
+    <Authors>dMonGirl</Authors>
+    <Copyright>Copyright (c) dMonGirl 2026</Copyright>
+    <Description>Lightweight object-to-object mapper for .NET. API-compatible with the core of AutoMapper v14 (profiles, CreateMap, ForMember/MapFrom, ReverseMap, ConstructUsing, ConvertUsing, collections, primitive coercion). MIT-licensed. Includes a hardened mapper with configurable MaxDepth to mitigate uncontrolled-recursion denial-of-service on self-referential graphs.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageTags>mapping;objectmapper;automapper;dto</PackageTags>
+    <PackageTags>mapping objectmapper automapper dto mapper</PackageTags>
+    <PackageProjectUrl>https://github.com/nexus-cw/Morph</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/nexus-cw/Morph</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageReleaseNotes>Initial alpha release.
+
+- Core AutoMapper v14 API subset: Profile, CreateMap, ForMember+MapFrom, ReverseMap, ConstructUsing, ConvertUsing&lt;T&gt; / ITypeConverter&lt;,&gt;, Map(source, existingDestination), multi-profile registration, AssertConfigurationIsValid.
+- Property-by-name convention mapping.
+- Primitive coercion (decimal, DateTime).
+- Collections (List, empty, nested).
+- Runtime-type dispatch.
+- Hardened against CVE-2026-32933 (uncontrolled recursion on self-referential graphs): configurable MaxDepth (default 32) throws a catchable AutoMapperMappingException instead of StackOverflowException.
+- Drop-in compat verified against AutoMapper 14.0.0 via a dual-compilation harness (21 consumer scenarios, all green on both legs).
+
+Not in this release: ProjectTo / EF integration, inheritance maps, flattening, open generics, naming conventions, ForCtorParam. See docs/api-surface.md on GitHub for the authoritative feature matrix.</PackageReleaseNotes>
+
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <DebugType>portable</DebugType>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
     <PackageReference Include="System.Memory" Version="4.5.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
   </ItemGroup>
 
 </Project>
