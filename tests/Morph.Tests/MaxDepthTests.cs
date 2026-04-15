@@ -67,6 +67,31 @@ public class MaxDepthTests
         Assert.Throws<AutoMapperMappingException>(() => mapper.Map<SrcNode, DstNode>(root));
     }
 
+    // C2 regression: a consumer must not be able to raise MaxDepth after CreateMapper()
+    // and have the live mapper honour the new ceiling — that would reopen CVE-2026-32933.
+    // The mapper snapshots MaxDepth in its ctor, so post-create mutation is inert.
+    [Fact]
+    public void MaxDepth_mutation_after_CreateMapper_is_ignored()
+    {
+        var config = new MapperConfiguration(cfg => cfg.CreateMap<SrcNode, DstNode>());
+        config.MaxDepth = 4;
+        var mapper = config.CreateMapper();
+
+        // Post-create escalation attempt — should have no effect on the live mapper.
+        config.MaxDepth = int.MaxValue;
+
+        var root = new SrcNode { Value = 0 };
+        var current = root;
+        for (int i = 1; i < 20; i++)
+        {
+            current.Self = new SrcNode { Value = i };
+            current = current.Self;
+        }
+
+        var ex = Assert.Throws<AutoMapperMappingException>(() => mapper.Map<SrcNode, DstNode>(root));
+        Assert.Contains("Max recursion depth (4)", ex.Message);
+    }
+
     // Same-type self-reference case: current Morph behavior is reference-preserve (no clone),
     // so no recursion happens. That's a deliberate consequence of the "IsInstanceOfType → return
     // value" shortcut in CoerceOrNestedMap. Documenting the behavior so it doesn't silently change.

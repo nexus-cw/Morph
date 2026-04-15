@@ -11,7 +11,16 @@ namespace Morph;
 internal sealed class Mapper : IMapper
 {
     private readonly MapperConfiguration _config;
-    public Mapper(MapperConfiguration config) { _config = config; }
+    // Snapshot of the depth cap at mapper-creation time. Held here, not read live from
+    // _config, so a consumer cannot raise MapperConfiguration.MaxDepth to int.MaxValue
+    // after CreateMapper() and reopen CVE-2026-32933. See ticket #69 / review #5948 (C2).
+    private readonly int _maxDepth;
+
+    public Mapper(MapperConfiguration config)
+    {
+        _config = config;
+        _maxDepth = config.MaxDepth;
+    }
 
     public IConfigurationProvider ConfigurationProvider => _config;
 
@@ -101,9 +110,9 @@ internal sealed class Mapper : IMapper
 
     private void GuardDepth(int depth, Type sourceType, Type destinationType)
     {
-        if (depth >= _config.MaxDepth)
+        if (depth >= _maxDepth)
             throw new AutoMapperMappingException(
-                $"Max recursion depth ({_config.MaxDepth}) exceeded mapping {sourceType.Name} → {destinationType.Name}. " +
+                $"Max recursion depth ({_maxDepth}) exceeded mapping {sourceType.Name} → {destinationType.Name}. " +
                 $"Raise MapperConfiguration.MaxDepth if the graph is legitimately deep; otherwise check for cycles.")
             {
                 SourceType = sourceType,
