@@ -1,0 +1,16 @@
+bin/
+obj/
+*.user
+*.suo
+.vs/
+.vscode/
+.idea/
+packages/
+*.nupkg
+artifacts/
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+.DS_Store
+Thumbs.db
