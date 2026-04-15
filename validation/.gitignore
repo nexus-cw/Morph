@@ -1,8 +1,12 @@
 # AutoMapper source is cloned locally for validation — never committed to Morph.
 automapper-v14/
-# Harness temp project is rebuilt each run from the cloned source — never committed
-# because it contains (rewritten) AutoMapper test code.
+# Unit-test harness temp project is rebuilt each run from the cloned source — never committed.
 harness/
 last-run-report.md
 last-run-report.md.tmp
+# Compat harness regenerates gen/ each run (sed-rewrite of shared/ for the AutoMapper leg).
+compat/gen/
+compat/bin/
+compat/obj/
+compat/compat-report.md
 *.log

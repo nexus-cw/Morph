@@ -83,10 +83,22 @@ internal sealed class MemberPlan
     /// <summary>Resolve <c>d =&gt; d.Foo.Bar</c>-style expression to its terminal MemberInfo.</summary>
     public static MemberInfo ResolveMember(LambdaExpression expr)
     {
+        if (TryResolveMember(expr, out var member)) return member!;
+        throw new ArgumentException($"Expected a member-access expression, got: {expr}");
+    }
+
+    /// <summary>
+    /// Same shape as <see cref="ResolveMember"/> but returns false instead of throwing.
+    /// Used by <c>MapFrom(Expression)</c> overloads that need to fall back to compiling the
+    /// expression when it isn't a simple member access (e.g. <c>s =&gt; s.First + s.Last</c>).
+    /// </summary>
+    public static bool TryResolveMember(LambdaExpression expr, out MemberInfo? member)
+    {
         var body = expr.Body;
         if (body is UnaryExpression u && u.NodeType == ExpressionType.Convert)
             body = u.Operand;
-        if (body is MemberExpression me) return me.Member;
-        throw new ArgumentException($"Expected a member-access expression, got: {expr}");
+        if (body is MemberExpression me) { member = me.Member; return true; }
+        member = null;
+        return false;
     }
 }

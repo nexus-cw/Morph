@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    AutoMapper v14 leg of the compat harness. Compiles the *rewritten* shared source (under
+    `gen/`) — the compat.sh script sed-rewrites `using Morph;` → `using AutoMapper;` from
+    `shared/` into `gen/` before build. Runs the identical CompatTests against AutoMapper 14.0.0
+    NuGet. Green here + green in Consumer.Morph.csproj = drop-in compat proved on covered surface.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <RootNamespace>Compat.AutoMapper</RootNamespace>
+    <AssemblyName>Compat.AutoMapper</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <!-- Suppress the expected NU1903 — this project intentionally pulls in AutoMapper 14.0.0
+         *for the purpose of* demonstrating Morph mitigates that exact CVE. -->
+    <NoWarn>$(NoWarn);NU1903</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <PackageReference Include="Shouldly" Version="4.2.1" />
+    <PackageReference Include="AutoMapper" Version="14.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="shared\**\*.cs" />
+    <Compile Include="gen\**\*.cs" />
+  </ItemGroup>
+</Project>
