@@ -15,14 +15,19 @@ public sealed class MapperConfiguration : IConfigurationProvider
 
     // Default recursion cap for nested maps. Guards against DoS via self-referential graphs
     // (cf. AutoMapper CVE-2026-32933). Legitimate object graphs rarely exceed ~10 levels;
-    // 32 leaves headroom without allowing unbounded stack growth.
-    public int MaxDepth { get; set; } = 32;
+    // 32 leaves headroom without allowing unbounded stack growth. Configure inside the
+    // MapperConfiguration(cfg => cfg.MaxDepth = N) action — the getter is public for
+    // diagnostics / test assertions but the setter is internal so consumers can't mutate
+    // it post-construction and be surprised that the live mapper ignored them.
+    public int MaxDepth { get; internal set; } = 32;
 
     public MapperConfiguration(Action<IMapperConfigurationExpression> configure)
     {
         if (configure is null) throw new ArgumentNullException(nameof(configure));
         var expr = new MapperConfigurationExpression();
         configure(expr);
+
+        MaxDepth = expr.MaxDepth;
 
         var allDefinitions = expr.Profiles.SelectMany(p => p.Definitions)
             .Concat(expr.InlineDefinitions);

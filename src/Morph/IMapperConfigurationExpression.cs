@@ -9,6 +9,14 @@ namespace Morph;
 /// </summary>
 public interface IMapperConfigurationExpression
 {
+    /// <summary>
+    /// Maximum recursion depth for nested maps. Default 32. Guards against DoS via
+    /// self-referential graphs (cf. AutoMapper CVE-2026-32933). Set this inside the
+    /// configure action; the value is snapshotted into the live mapper at
+    /// <c>CreateMapper()</c> time and cannot be changed thereafter.
+    /// </summary>
+    int MaxDepth { get; set; }
+
     /// <summary>Register a profile type. A new instance is created.</summary>
     void AddProfile<TProfile>() where TProfile : Profile, new();
 

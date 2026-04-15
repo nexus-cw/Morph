@@ -52,8 +52,11 @@ public class MaxDepthTests
     [Fact]
     public void MaxDepth_is_configurable()
     {
-        var config = new MapperConfiguration(cfg => cfg.CreateMap<SrcNode, DstNode>());
-        config.MaxDepth = 4;
+        var config = new MapperConfiguration(cfg =>
+        {
+            cfg.MaxDepth = 4;
+            cfg.CreateMap<SrcNode, DstNode>();
+        });
         var mapper = config.CreateMapper();
 
         var root = new SrcNode { Value = 0 };
@@ -67,18 +70,42 @@ public class MaxDepthTests
         Assert.Throws<AutoMapperMappingException>(() => mapper.Map<SrcNode, DstNode>(root));
     }
 
-    // C2 regression: a consumer must not be able to raise MaxDepth after CreateMapper()
-    // and have the live mapper honour the new ceiling — that would reopen CVE-2026-32933.
-    // The mapper snapshots MaxDepth in its ctor, so post-create mutation is inert.
+    // C2 + P1: MaxDepth is configured inside the CreateMapper(cfg => ...) lambda and cannot
+    // be mutated by a consumer post-construction. The setter on MapperConfiguration is
+    // internal — unreachable from external consumer code — and the live mapper snapshots
+    // the value at ctor time anyway. Both guarantees together close CVE-2026-32933: an
+    // attacker-controlled reference to the MapperConfiguration can't raise the depth cap.
+    [Fact]
+    public void MaxDepth_setter_is_not_publicly_accessible()
+    {
+        var prop = typeof(MapperConfiguration).GetProperty(nameof(MapperConfiguration.MaxDepth))!;
+        Assert.NotNull(prop.GetMethod);
+        Assert.True(prop.GetMethod!.IsPublic, "getter should stay public for diagnostics / assertions");
+        var setter = prop.SetMethod;
+        Assert.NotNull(setter);
+        Assert.False(setter!.IsPublic,
+            "setter must not be publicly callable — consumers must configure MaxDepth inside the CreateMapper lambda");
+    }
+
+    // Belt-and-braces: even given access to the internal setter (in-assembly or via
+    // reflection by a malicious caller), the *live mapper* must still ignore late changes
+    // because it snapshotted MaxDepth at ctor time. This is the original C2 invariant.
     [Fact]
     public void MaxDepth_mutation_after_CreateMapper_is_ignored()
     {
-        var config = new MapperConfiguration(cfg => cfg.CreateMap<SrcNode, DstNode>());
-        config.MaxDepth = 4;
+        var config = new MapperConfiguration(cfg =>
+        {
+            cfg.MaxDepth = 4;
+            cfg.CreateMap<SrcNode, DstNode>();
+        });
         var mapper = config.CreateMapper();
 
-        // Post-create escalation attempt — should have no effect on the live mapper.
-        config.MaxDepth = int.MaxValue;
+        // Force a post-create mutation via the internal setter (reachable in-assembly).
+        // An external consumer cannot hit this path; we use it here to prove the snapshot
+        // holds even if the config object is later mutated.
+        typeof(MapperConfiguration)
+            .GetProperty(nameof(MapperConfiguration.MaxDepth))!
+            .SetValue(config, int.MaxValue);
 
         var root = new SrcNode { Value = 0 };
         var current = root;

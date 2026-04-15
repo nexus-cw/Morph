@@ -11,6 +11,7 @@ namespace Morph;
 /// </summary>
 internal sealed class MapperConfigurationExpression : IMapperConfigurationExpression
 {
+    public int MaxDepth { get; set; } = 32;
     public List<Profile> Profiles { get; } = new();
     public List<object> InlineDefinitions { get; } = new();
 
