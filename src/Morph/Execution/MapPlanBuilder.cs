@@ -13,11 +13,17 @@ namespace Morph.Execution;
 /// </summary>
 internal static class MapPlanBuilder
 {
-    public static Dictionary<(Type, Type), TypeMap> Build(IEnumerable<object> expressions)
+    public static Dictionary<(Type, Type), TypeMap> Build(
+        IEnumerable<object> expressions,
+        bool mirrorIgnoreOnReverse = true)
     {
         var result = new Dictionary<(Type, Type), TypeMap>();
 
         // First pass: collect all expressions (including reverses) into a flat list.
+        // While walking, mirror Ignored forward plans onto the reverse expression's
+        // ExplicitMembers if enabled — see MirrorIgnoreOnReverse docs on
+        // MapperConfiguration. Done here (not inside ReverseMap()) because the flag
+        // lives on the top-level config, not on the individual mapping expression.
         var flat = new List<(Type, Type, object)>();
         foreach (var expr in expressions)
         {
@@ -32,6 +38,10 @@ internal static class MapPlanBuilder
                 var rType = reverse.GetType();
                 var rSrc = (Type)rType.GetProperty("SourceType")!.GetValue(reverse)!;
                 var rDst = (Type)rType.GetProperty("DestinationType")!.GetValue(reverse)!;
+
+                if (mirrorIgnoreOnReverse)
+                    MirrorIgnoredPlans(expr, exprType, reverse, rType, reverseDestType: rDst);
+
                 flat.Add((rSrc, rDst, reverse));
             }
         }
@@ -45,6 +55,37 @@ internal static class MapPlanBuilder
         }
 
         return result;
+    }
+
+    // For each forward ExplicitMembers entry of Kind == Ignored, add a matching Ignored
+    // plan to the reverse expression's ExplicitMembers, keyed by member name on the
+    // reverse destination type. Silently skips members that don't exist on the reverse
+    // destination (e.g. if the forward destination has an extra field the source lacks).
+    // Preserves anything the caller already set on the reverse — explicit wins over
+    // mirrored default.
+    private static void MirrorIgnoredPlans(
+        object forwardExpr, Type forwardExprType,
+        object reverseExpr, Type reverseExprType,
+        Type reverseDestType)
+    {
+        var forwardMembers =
+            (Dictionary<string, MemberPlan>)forwardExprType.GetProperty("ExplicitMembers")!.GetValue(forwardExpr)!;
+        var reverseMembers =
+            (Dictionary<string, MemberPlan>)reverseExprType.GetProperty("ExplicitMembers")!.GetValue(reverseExpr)!;
+
+        const BindingFlags flags = BindingFlags.Public | BindingFlags.Instance;
+        foreach (var kv in forwardMembers)
+        {
+            if (kv.Value.Kind != MemberPlanKind.Ignored) continue;
+            var name = kv.Value.DestinationMember.Name;
+            if (reverseMembers.ContainsKey(name)) continue; // caller already configured this member
+
+            MemberInfo? reverseMember =
+                (MemberInfo?)reverseDestType.GetProperty(name, flags) ?? reverseDestType.GetField(name, flags);
+            if (reverseMember is null) continue; // no matching member on reverse destination
+
+            reverseMembers[name] = new MemberPlan(reverseMember) { Kind = MemberPlanKind.Ignored };
+        }
     }
 
     private static void BuildOne(TypeMap typeMap, object expression)

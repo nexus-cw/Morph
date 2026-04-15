@@ -21,6 +21,12 @@ public sealed class MapperConfiguration : IConfigurationProvider
     // it post-construction and be surprised that the live mapper ignored them.
     public int MaxDepth { get; internal set; } = 32;
 
+    // Hardening default — mirror a forward Ignore() onto the reverse map so a field deliberately
+    // kept out of the forward leg doesn't silently round-trip via the reverse's convention match.
+    // Diverges from AutoMapper v14; set false inside the configure action for byte-parity.
+    // Same snapshot pattern as MaxDepth: internal setter, captured at construction time.
+    public bool MirrorIgnoreOnReverse { get; internal set; } = true;
+
     public MapperConfiguration(Action<IMapperConfigurationExpression> configure)
     {
         if (configure is null) throw new ArgumentNullException(nameof(configure));
@@ -28,10 +34,11 @@ public sealed class MapperConfiguration : IConfigurationProvider
         configure(expr);
 
         MaxDepth = expr.MaxDepth;
+        MirrorIgnoreOnReverse = expr.MirrorIgnoreOnReverse;
 
         var allDefinitions = expr.Profiles.SelectMany(p => p.Definitions)
             .Concat(expr.InlineDefinitions);
-        TypeMaps = MapPlanBuilder.Build(allDefinitions);
+        TypeMaps = MapPlanBuilder.Build(allDefinitions, MirrorIgnoreOnReverse);
     }
 
     /// <summary>
