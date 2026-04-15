@@ -92,32 +92,56 @@ public class CompatFixesTests
         roundTripped.Email.ShouldBe("ada@example.com");
     }
 
-    // --- B1: forward Ignore() does NOT mirror onto the reverse map in AutoMapper v14.
-    // The reverse leg convention-matches the same-named member and copies it. This test
-    // pins that behavior as the parity contract on feat/drop-in-compat.
+    // --- B1: forward Ignore() handling on the reverse map. This is the one deliberate
+    // deviation between Morph's default and AutoMapper v14:
+    //   - AutoMapper v14: Ignore is forward-only; reverse convention-copies the member.
+    //   - Morph default:  Ignore mirrors onto the reverse, keeping the field at its default
+    //                     (hardening against silent round-trip leaks of sensitive fields).
+    //   - Morph opt-out:  MirrorIgnoreOnReverse = false reproduces v14 byte-for-byte.
     //
-    // Morph makes a different, safer default on fix/cve-hardening (Ignore mirrored by name),
-    // opt-outable via MirrorIgnoreOnReverse = false. When the hardening branch merges here
-    // the compat harness gains a second assertion proving the flag-off path matches v14.
+    // The harness runs the same source under both libs, so we use COMPAT_MORPH to gate the
+    // assertions. The Morph leg runs TWO tests (default-on deviation + flag-off parity);
+    // the AutoMapper leg runs ONE test (parity only — it has no flag to toggle).
 
     [Fact]
-    public void B1_Ignore_IsForwardOnly_MatchesV14_ReverseCopiesByConvention()
+    public void B1_Ignore_MatchesV14_WhenForwardOnly()
     {
-        var mapper = BuildMapper();
+        // On AutoMapper v14 this is the only behavior. On Morph, we set the flag off so the
+        // configured mapper matches v14's forward-only interpretation.
+        var config = new MapperConfiguration(cfg =>
+        {
+#if COMPAT_MORPH
+            cfg.MirrorIgnoreOnReverse = false;
+#endif
+            cfg.AddProfile<CompatFixesProfile>();
+        });
+        var mapper = config.CreateMapper();
 
-        // Forward: Ignore drops the value as expected on both libs.
-        var source = new AuditSource { Id = 1, InternalNotes = "secret-on-source" };
-        var dto = mapper.Map<AuditSource, AuditDto>(source);
-        dto.Id.ShouldBe(1);
-        dto.InternalNotes.ShouldBe("");
+        // Forward: Ignore drops the value (both libs agree).
+        var forward = mapper.Map<AuditSource, AuditDto>(
+            new AuditSource { Id = 1, InternalNotes = "secret-on-source" });
+        forward.InternalNotes.ShouldBe("");
 
-        // Reverse: v14 does NOT mirror the Ignore. Convention-match on the same-named member
-        // copies it straight through. Morph on this branch matches v14; the round-trip carries
-        // a value the forward Ignore would have dropped.
+        // Reverse: convention-match copies the same-named member. v14 behavior.
+        var back = mapper.Map<AuditDto, AuditSource>(
+            new AuditDto { Id = 2, InternalNotes = "came-via-convention" });
+        back.Id.ShouldBe(2);
+        back.InternalNotes.ShouldBe("came-via-convention");
+    }
+
+#if COMPAT_MORPH
+    // Morph-only: with the default config, Ignore mirrors onto the reverse. Proves the
+    // hardening default is active and drops a potentially-injected value the forward
+    // Ignore would have kept out.
+    [Fact]
+    public void B1_Morph_DefaultConfig_MirrorsIgnoreOnReverse()
+    {
+        var mapper = BuildMapper(); // MirrorIgnoreOnReverse defaults to true
         var tainted = new AuditDto { Id = 2, InternalNotes = "injected-by-client" };
         var back = mapper.Map<AuditDto, AuditSource>(tainted);
 
         back.Id.ShouldBe(2);
-        back.InternalNotes.ShouldBe("injected-by-client");
+        back.InternalNotes.ShouldBe(""); // mirrored Ignore drops it
     }
+#endif
 }

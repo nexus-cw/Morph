@@ -12,6 +12,9 @@
     <RootNamespace>Compat.Morph</RootNamespace>
     <AssemblyName>Compat.Morph</AssemblyName>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <!-- Lets compat tests conditionally exercise Morph-only surface (e.g. MirrorIgnoreOnReverse)
+         without breaking the shared source under AutoMapper's leg. -->
+    <DefineConstants>$(DefineConstants);COMPAT_MORPH</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="shared\**\*.cs" />
