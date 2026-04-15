@@ -140,6 +140,12 @@ public class MaxDepthTests
         }
 
         var ex = Assert.Throws<AutoMapperMappingException>(() => mapper.Map<SrcTree, DstTree>(root));
-        Assert.Contains("Max recursion depth", ex.Message);
+        // Pin the assertion: the guard must fire at the element-type boundary (SrcTree → DstTree)
+        // with the configured MaxDepth (32). Without these the test would also pass if a
+        // future refactor caused some other depth exception to fire earlier (e.g. at the outer
+        // collection pair), masking a regression of the actual C1 fix.
+        Assert.Contains("Max recursion depth (32)", ex.Message);
+        Assert.Equal(typeof(SrcTree), ex.SourceType);
+        Assert.Equal(typeof(DstTree), ex.DestinationType);
     }
 }
