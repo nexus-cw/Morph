@@ -73,6 +73,10 @@ internal static class MapPlanBuilder
         var reverseMembers =
             (Dictionary<string, MemberPlan>)reverseExprType.GetProperty("ExplicitMembers")!.GetValue(reverseExpr)!;
 
+        // Match properties first, then public fields — consistent with our convention-match
+        // behavior elsewhere in MapPlanBuilder. Slightly broader surface than AutoMapper v14
+        // (which emphasizes properties), but makes the mirror rule uniform with how Morph
+        // already discovers source/destination members.
         const BindingFlags flags = BindingFlags.Public | BindingFlags.Instance;
         foreach (var kv in forwardMembers)
         {
