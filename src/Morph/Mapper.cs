@@ -81,7 +81,7 @@ internal sealed class Mapper : IMapper
         return ValueCoercion.Convert(source, destinationType);
     }
 
-    private void MapInto(object? source, Type sourceType, object destination, Type destinationType, int depth)
+    internal void MapInto(object? source, Type sourceType, object destination, Type destinationType, int depth)
     {
         if (source is null) return;
         GuardDepth(depth, sourceType, destinationType);
@@ -122,7 +122,11 @@ internal sealed class Mapper : IMapper
 
     private object ExecuteTypeMap(TypeMap typeMap, object source, object? destination, int depth)
     {
-        var context = new ResolutionContext(this);
+        // Resolvers that re-enter the mapper via `context.Mapper.Map<>()` must inherit
+        // the current depth — otherwise a resolver that maps a nested value restarts the
+        // depth counter at 0 and bypasses MaxDepth (I4). DepthAwareMapper pre-loads
+        // `depth + 1` so the re-entry counts as the next recursion level.
+        var context = new ResolutionContext(new DepthAwareMapper(this, depth), depth);
 
         // Full-type converter short-circuit.
         if (typeMap.TypeConverterType is not null)
