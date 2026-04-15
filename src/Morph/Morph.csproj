@@ -2,7 +2,6 @@
 
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net10.0</TargetFrameworks>
-    <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
@@ -42,6 +41,21 @@ Not in this release: ProjectTo / EF integration, inheritance maps, flattening, o
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
+
+  <!--
+    LangVersion pinned per TFM (I6). netstandard2.0 consumers source-building the
+    package must be able to compile the sources with a stable C# version; 'latest'
+    emits C#12 IL that VS2019/.NET5-era compilers reject. Morph's sources use
+    file-scoped namespaces (C#10), so 10.0 is the floor — fine for VS2022+ and any
+    Rider build from the last three years, which is the real-world ns2.0 audience.
+    net10.0 stays on 'latest' so we get to use whatever the modern toolchain brings.
+  -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+    <LangVersion>10.0</LangVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(TargetFramework)' != 'netstandard2.0'">
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
     <PackageReference Include="System.Memory" Version="4.5.5" />
