@@ -114,9 +114,15 @@ public class MaxDepthTests
 
     // C1 regression: recursion through collection elements must tick the depth counter.
     // Pre-fix, CollectionMapper passed `depth` straight through instead of `depth + 1`, so
-    // GuardDepth never fired on list-element nesting and deep/cyclic graphs could blow the
-    // stack (uncatchable StackOverflowException). We exercise this with a deep-but-finite
-    // chain so the pre-fix failure is a missed-throw, not a test-host crash.
+    // GuardDepth never fired on list-element nesting and deep/cyclic graphs blew the stack.
+    //
+    // DO NOT "fix" this into a true cycle (e.g. `root.Children.Add(root)`). On the pre-fix
+    // code that variant throws StackOverflowException, which is uncatchable in .NET: the CLR
+    // bypasses exception handling and terminates the test host, so Assert.Throws never runs
+    // and the whole test run dies instead of failing cleanly. The deep-but-finite chain
+    // exercises the same CollectionMapper path (pre-fix: depth never increments → guard
+    // never fires → test fails on "no exception"; post-fix: guard trips at MaxDepth), which
+    // is what the regression assertion actually needs.
     [Fact]
     public void Deep_collection_element_chain_trips_depth_guard()
     {
