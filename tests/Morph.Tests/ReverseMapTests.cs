@@ -107,4 +107,54 @@ public class ReverseMapTests
             new DstWithSecret { Id = 2, InternalNotes = "caller-said-copy-this" });
         Assert.Equal("caller-said-copy-this", reverse.InternalNotes);
     }
+
+    // I5 coverage: renamed-member MapFrom should auto-reverse. AutoMapper v14 inverts a
+    // simple `ForMember(d => d.X, opt => opt.MapFrom(s => s.Y))` into the equivalent
+    // reverse member map without the user calling ForMember on the reverse expression.
+    // Pre-fix, ReverseMap() returned an empty MappingExpression and the reverse map
+    // convention-matched by name — "Email" on the reverse source wouldn't find "EmailAddress"
+    // on the reverse destination, so the field ended up empty.
+    public class SrcRenamed { public int Id { get; set; } public string Email { get; set; } = ""; }
+    public class DstRenamed { public int Id { get; set; } public string EmailAddress { get; set; } = ""; }
+
+    [Fact]
+    public void ReverseMap_auto_reverses_simple_member_MapFrom()
+    {
+        var cfg = new MapperConfiguration(c =>
+            c.CreateMap<SrcRenamed, DstRenamed>()
+             .ForMember(d => d.EmailAddress, opt => opt.MapFrom(s => s.Email))
+             .ReverseMap());
+        var mapper = cfg.CreateMapper();
+
+        var forward = mapper.Map<SrcRenamed, DstRenamed>(new SrcRenamed { Id = 1, Email = "x@y" });
+        Assert.Equal("x@y", forward.EmailAddress);
+
+        var reverse = mapper.Map<DstRenamed, SrcRenamed>(new DstRenamed { Id = 2, EmailAddress = "a@b" });
+        Assert.Equal(2, reverse.Id);
+        Assert.Equal("a@b", reverse.Email); // <- pre-fix this was "" (empty string default)
+    }
+
+    // Non-reversible forward configs (func, resolver, UseValue, Ignore) must NOT be
+    // auto-carried to the reverse — the reverse destination member can just fall back to
+    // convention matching by name, which is AutoMapper v14's behavior and the safest default.
+    public class SrcWithName { public string First { get; set; } = ""; public string Last { get; set; } = ""; }
+    public class DstWithName { public string FullName { get; set; } = ""; public string First { get; set; } = ""; public string Last { get; set; } = ""; }
+
+    [Fact]
+    public void ReverseMap_drops_non_reversible_func_MapFrom()
+    {
+        var cfg = new MapperConfiguration(c =>
+            c.CreateMap<SrcWithName, DstWithName>()
+             .ForMember(d => d.FullName, opt => opt.MapFrom(s => s.First + " " + s.Last))
+             .ReverseMap());
+        var mapper = cfg.CreateMapper();
+
+        // Reverse map should still work by convention for First and Last. FullName on the
+        // reverse-source isn't reversible (it was a computed forward value) — it convention-
+        // matches the reverse-dest's FullName, which is fine.
+        var reverse = mapper.Map<DstWithName, SrcWithName>(
+            new DstWithName { FullName = "ignored", First = "Alice", Last = "Zed" });
+        Assert.Equal("Alice", reverse.First);
+        Assert.Equal("Zed", reverse.Last);
+    }
 }

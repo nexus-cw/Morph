@@ -58,6 +58,28 @@ internal sealed class MappingExpression<TSource, TDestination> : IMappingExpress
     public IMappingExpression<TDestination, TSource> ReverseMap()
     {
         var reverse = new MappingExpression<TDestination, TSource>();
+
+        // Auto-reverse simple source-member maps so a forward
+        //   ForMember(d => d.EmailAddress, opt => opt.MapFrom(s => s.Email))
+        // gives the reverse map the equivalent
+        //   ForMember(s => s.Email, opt => opt.MapFrom(d => d.EmailAddress))
+        // without the caller restating it. Non-reversible forward configs (computed funcs,
+        // resolvers, UseValue, Ignore) are dropped from the reverse — convention matching
+        // on the reverse side is the safest fallback, matching AutoMapper v14 behavior (I5).
+        foreach (var kv in ExplicitMembers)
+        {
+            var forward = kv.Value;
+            if (forward.Kind != MemberPlanKind.MapFromSourceMember) continue;
+            if (forward.SourceMember is null) continue;
+
+            var reversePlan = new MemberPlan(forward.SourceMember)
+            {
+                Kind = MemberPlanKind.MapFromSourceMember,
+                SourceMember = forward.DestinationMember,
+            };
+            reverse.ExplicitMembers[forward.SourceMember.Name] = reversePlan;
+        }
+
         ReverseMapExpression = reverse;
         return reverse;
     }
