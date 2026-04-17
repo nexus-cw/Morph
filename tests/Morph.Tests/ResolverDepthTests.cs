@@ -89,11 +89,11 @@ public class ResolverDepthTests
     {
         var config = new MapperConfiguration(cfg =>
         {
+            cfg.MaxDepth = 1;
             cfg.CreateMap<Inner, InnerDto>();
             cfg.CreateMap<OuterWithCtor, OuterDtoWithCtor>()
                .ConstructUsing((src, ctx) => new OuterDtoWithCtor(ctx.Mapper.Map<InnerDto>(src.Pet)));
         });
-        config.MaxDepth = 1;
         var mapper = config.CreateMapper();
 
         var outer = new OuterWithCtor(new Inner { Value = 42 });
