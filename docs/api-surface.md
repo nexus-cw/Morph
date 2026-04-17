@@ -141,17 +141,23 @@ These are real AutoMapper features that Morph will NOT ship in v0.1. Listed expl
 
 ---
 
-## Breaking differences from AutoMapper
+## Deviations from AutoMapper v14
 
-Where Morph *deliberately* diverges. Called out so migrators aren't surprised.
+Where Morph *deliberately* diverges. Listed first because migrators need to check this section before swapping `using` statements. Each deviation has a stated rationale and, where applicable, an opt-out for byte-for-byte v14 parity.
 
-1. **No `AddMaps(assembly)` scanning for standalone `CreateMap` calls** — only profiles are scanned. Rationale: implicit map discovery makes debugging configuration painful. `AddProfiles(assembly)` scans for `Profile`-derived types only.
+### Hardening defaults (safer than v14)
 
-2. **No `MissingTypeMapException` silent handling in `Map<T>`** — if a map isn't configured and types don't trivially match, we throw. AutoMapper has had several quiet modes over its history; we pick one (strict) and stay there.
+1. **`MaxDepth` caps nested-map recursion at 32 by default.** Prevents stack exhaustion from self-referential or adversarial object graphs. This mitigates the CVE-2026-32933 pattern — AutoMapper ≤15.1.0 / ≤16.1.0 shipped with no default cap and was vulnerable to DoS via `StackOverflowException` (which .NET cannot catch). Morph throws `AutoMapperMappingException` on overflow, which *is* catchable. Configurable inside the `MapperConfiguration` lambda via `cfg.MaxDepth = N`. Setter is internal on the live `MapperConfiguration` — value snapshots at `CreateMapper()` time and cannot be late-mutated.
 
-3. **`AssertConfigurationIsValid()` is opinionated** — it treats any public settable destination property that has no matching source, no `MapFrom`, and no `Ignore()` as an error. AutoMapper's default is the same, but Morph doesn't offer an off-switch.
+2. **`MirrorIgnoreOnReverse` mirrors forward `Ignore()` onto the reverse map by default.** A `ForMember(d => d.X, o => o.Ignore()).ReverseMap()` keeps the reverse-destination member at its default rather than convention-copying the value back. Prevents silent round-trip leaks of fields the caller explicitly said not to touch. Diverges from v14, which treats `Ignore()` as forward-only. **Opt-out for v14 parity:** `cfg.MirrorIgnoreOnReverse = false;` inside the configure lambda. Same snapshot pattern as `MaxDepth` — not late-mutable.
 
-4. **Default `MaxDepth` of 32 on nested maps** — prevents stack exhaustion from self-referential or adversarial object graphs. This is the mitigation for the CVE-2026-32933 pattern (AutoMapper ≤15.1.0 / ≤16.1.0 had no default cap and was vulnerable to DoS via `StackOverflowException`, which .NET cannot catch). Morph throws `AutoMapperMappingException` on overflow, which *is* catchable. Configurable via `MapperConfiguration.MaxDepth = N`.
+### Surface-scope narrowings
+
+3. **No `AddMaps(assembly)` scanning for standalone `CreateMap` calls** — only profiles are scanned. Rationale: implicit map discovery makes debugging configuration painful. `AddProfiles(assembly)` scans for `Profile`-derived types only.
+
+4. **No `MissingTypeMapException` silent handling in `Map<T>`** — if a map isn't configured and types don't trivially match, we throw. AutoMapper has had several quiet modes over its history; we pick one (strict) and stay there.
+
+5. **`AssertConfigurationIsValid()` is opinionated** — it treats any public settable destination property that has no matching source, no `MapFrom`, and no `Ignore()` as an error. AutoMapper's default is the same, but Morph doesn't offer an off-switch.
 
 ---
 
@@ -178,21 +184,24 @@ src/Morph/
 ├── Execution/
 │   ├── TypeMap.cs                    // internal — resolved map plan per (TSrc,TDest)
 │   ├── MapPlanBuilder.cs             // internal — turns fluent config into executable plan
-│   ├── PropertyMapper.cs             // internal — per-member executor
+│   ├── MemberPlan.cs                 // internal — per-member plan (kind + metadata)
+│   ├── ValueCoercion.cs              // internal — primitive + coercion rules
 │   └── CollectionMapper.cs           // internal — IEnumerable<T> → target collection
 └── Conventions/
     └── NameMatcher.cs                // internal — default exact-name convention
 ```
 
+Execution internals referenced above (`MapPlanBuilder`, `TypeMap`, `MemberPlan`, `CollectionMapper`, `ValueCoercion`) are all under `src/Morph/Execution/`. They're internal — not part of the public API surface.
+
 ---
 
 ## Test plan
 
-`tests/Morph.Tests/` — xUnit.
+`tests/Morph.Tests/` — xUnit, plus a dual-compile compat harness under `validation/compat/`.
 
 v0.1 ship criteria — all tests in these groups green:
 
-1. **Basic — `BasicMapping.cs`:** primitive property mapping, nested object mapping, collection mapping
+1. **Basic — `BasicMappingTests.cs`:** primitive property mapping, nested object mapping, collection mapping
 2. **Profiles — `ProfileTests.cs`:** `AddProfile<T>`, `AddProfile(instance)`, `AddProfiles(assembly)`
 3. **ForMember — `ForMemberTests.cs`:** `MapFrom(expression)`, `MapFrom(func)`, `MapFrom<TResolver>()`, `Ignore()`, `UseValue(...)`, `Condition(...)`
 4. **ReverseMap — `ReverseMapTests.cs`:** symmetric round-trip on mapped types
@@ -200,14 +209,7 @@ v0.1 ship criteria — all tests in these groups green:
 6. **ConstructUsing — `ConstructUsingTests.cs`:** custom constructor with + without `ResolutionContext`
 7. **Validation — `ValidationTests.cs`:** `AssertConfigurationIsValid()` catches unmapped members; passes when members are `Ignore()`d
 8. **Collections — `CollectionTests.cs`:** source `IEnumerable<T>` → dest `List<T>` / `T[]` / `ICollection<T>` / `IEnumerable<T>`
-9. **Drop-in — `AutoMapperCompatTests.cs`:** port 10-15 representative AutoMapper sample tests with `using Morph;` substituted for `using AutoMapper;` — they must pass verbatim.
+9. **Depth cap — `MaxDepthTests.cs`:** self-referential graphs throw at `MaxDepth` instead of blowing the stack (CVE-2026-32933 mitigation); configurable per-mapper.
+10. **Drop-in compat harness — `validation/compat/`:** shared test source compiles against both Morph and AutoMapper 14.0.0 NuGet, proving parity on the covered scenarios. The harness is the acceptance gate for drop-in claims.
 
 Drop-in compat group is the acceptance gate. If those pass, Morph has hit v0.1.
-
----
-
-## Open questions
-
-1. **Consumer target for validation.** Operator has real AutoMapper consumers at work. Which one do we point Morph at for the drop-in test? Knowing which features the consumer actually uses would let me prioritize correctly.
-2. **Package distribution.** NuGet.org publishing is a separate decision from "build works." Shipping to nuget.org vs. a private feed first?
-3. **Source-generator path.** AutoMapper 13.x uses expression-tree-based mapping (runtime compile). Morph v0.1 matches that. A source-generator approach (compile-time map generation) would be faster at runtime but is a v1.x decision. Flagged here so we don't back ourselves into an expression-tree corner.
