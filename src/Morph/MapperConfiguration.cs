@@ -15,8 +15,17 @@ public sealed class MapperConfiguration : IConfigurationProvider
 
     // Default recursion cap for nested maps. Guards against DoS via self-referential graphs
     // (cf. AutoMapper CVE-2026-32933). Legitimate object graphs rarely exceed ~10 levels;
-    // 32 leaves headroom without allowing unbounded stack growth.
-    public int MaxDepth { get; set; } = 32;
+    // 32 leaves headroom without allowing unbounded stack growth. Configure inside the
+    // MapperConfiguration(cfg => cfg.MaxDepth = N) action — the getter is public for
+    // diagnostics / test assertions but the setter is internal so consumers can't mutate
+    // it post-construction and be surprised that the live mapper ignored them.
+    public int MaxDepth { get; internal set; } = 32;
+
+    // Hardening default — mirror a forward Ignore() onto the reverse map so a field deliberately
+    // kept out of the forward leg doesn't silently round-trip via the reverse's convention match.
+    // Diverges from AutoMapper v14; set false inside the configure action for byte-parity.
+    // Same snapshot pattern as MaxDepth: internal setter, captured at construction time.
+    public bool MirrorIgnoreOnReverse { get; internal set; } = true;
 
     public MapperConfiguration(Action<IMapperConfigurationExpression> configure)
     {
@@ -24,9 +33,12 @@ public sealed class MapperConfiguration : IConfigurationProvider
         var expr = new MapperConfigurationExpression();
         configure(expr);
 
+        MaxDepth = expr.MaxDepth;
+        MirrorIgnoreOnReverse = expr.MirrorIgnoreOnReverse;
+
         var allDefinitions = expr.Profiles.SelectMany(p => p.Definitions)
             .Concat(expr.InlineDefinitions);
-        TypeMaps = MapPlanBuilder.Build(allDefinitions);
+        TypeMaps = MapPlanBuilder.Build(allDefinitions, MirrorIgnoreOnReverse);
     }
 
     /// <summary>
